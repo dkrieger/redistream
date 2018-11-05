@@ -1,3 +1,5 @@
+// NOTE: run `docker run -d -p 16379:6379 redis:5.0.0` before running go test
+
 package redistream
 
 import (
@@ -14,7 +16,7 @@ func getClient() *redis.Client {
 	r := redis.NewClient(&redis.Options{
 		Addr: addr})
 	if _, err := r.Ping().Result(); err != nil {
-		panic(fmt.Sprintf("connection to %s failed\n", addr))
+		panic(fmt.Sprintf("connection to %s failed. run `docker run -d -p 16379:6379 redis:5.0.0`\n", addr))
 	}
 	return r
 }
