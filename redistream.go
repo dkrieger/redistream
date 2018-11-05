@@ -111,14 +111,18 @@ func (c *Client) Consume(args ConsumeArgs) (StreamMap, error) {
 	// XREADGROUP
 	streamEntries := StreamMap{}
 	conf := c.getOverridenConf(override)
-	res, err := c.redisClient.XReadGroup(&redis.XReadGroupArgs{
+	xreadgroupargs := &redis.XReadGroupArgs{
 		Group:    consumer.Group,
 		Consumer: consumer.Name,
 		Streams:  streams,
 		Count:    conf.Count,
 		Block:    conf.Block,
-	}).Result()
-	if err != nil && err.Error() != "redis: nil" {
+	}
+	c.ensureStreamsInit(xreadgroupargs)
+	c.ensureGroupsInit(xreadgroupargs)
+	res, err := c.redisClient.XReadGroup(xreadgroupargs).Result()
+	// if err != nil && err.Error() != "redis: nil" {
+	if err != nil {
 		return streamEntries, err
 	}
 
@@ -139,6 +143,37 @@ func (c *Client) Consume(args ConsumeArgs) (StreamMap, error) {
 		streamEntries[stream.Stream] = entries
 	}
 	return streamEntries, nil
+}
+
+func (c *Client) ensureStreamsInit(args *redis.XReadGroupArgs) {
+	cli := c.redisClient
+	script := `local t = redis.call("type", KEYS[1]) ` +
+		`if t.ok == "none" then ` +
+		`redis.call("xadd", KEYS[1], "0-1", "empty", "me") ` +
+		`redis.call("xtrim", KEYS[1], "maxlen", 0) ` +
+		`end return 1`
+	var streams []string
+	for i := 0; i < len(args.Streams); i++ {
+		if i%2 == 0 {
+			streams = append(streams, args.Streams[i])
+		}
+	}
+	for _, stream := range streams {
+		if _, err := cli.Eval(script, []string{stream}).Result(); err != nil {
+			panic(err)
+		}
+	}
+}
+
+func (c *Client) ensureGroupsInit(args *redis.XReadGroupArgs) {
+	cli := c.redisClient
+	var streams [][]string
+	for i := 0; i < len(args.Streams); i += 2 {
+		streams = append(streams, args.Streams[i:i+2])
+	}
+	for _, stream := range streams {
+		cli.XGroupCreate(stream[0], args.Group, "0").Result()
+	}
 }
 
 type ProduceArgs struct {
