@@ -51,6 +51,24 @@ func WrapClient(redisClient *redis.Client, conf Config) *Client {
 	}
 }
 
+func (c *Client) getOverridenConf(override *Config) *Config {
+	conf := &Config{
+		MaxLen:       c.conf.MaxLen,
+		MaxLenApprox: c.conf.MaxLenApprox,
+		Block:        c.conf.Block,
+		Count:        c.conf.Count,
+	}
+	if override != nil {
+		conf = &Config{
+			MaxLen:       override.MaxLen,
+			MaxLenApprox: override.MaxLenApprox,
+			Block:        override.Block,
+			Count:        override.Count,
+		}
+	}
+	return conf
+}
+
 // Entry is based off redis.XMessage (go-redis)
 type Entry struct {
 	ID   string
@@ -79,16 +97,7 @@ func (s StreamMap) Flat() []Entry {
 }
 
 func (c *Client) Consume(consumer Consumer, streams []string, override *Config) (StreamMap, error) {
-	conf := &Config{
-		Count: c.conf.Count,
-		Block: c.conf.Block,
-	}
-	if override != nil {
-		conf = &Config{
-			Count: override.Count,
-			Block: override.Block,
-		}
-	}
+	conf := c.getOverridenConf(override)
 	args := &redis.XReadGroupArgs{
 		Group:    consumer.Group,
 		Consumer: consumer.Name,
@@ -120,16 +129,7 @@ func (c *Client) Consume(consumer Consumer, streams []string, override *Config) 
 }
 
 func (c *Client) Produce(stream string, entry Entry, override *Config) (string, error) {
-	conf := &Config{
-		MaxLen:       c.conf.MaxLen,
-		MaxLenApprox: c.conf.MaxLenApprox,
-	}
-	if override != nil {
-		conf = &Config{
-			MaxLen:       override.MaxLen,
-			MaxLenApprox: override.MaxLenApprox,
-		}
-	}
+	conf := c.getOverridenConf(override)
 	args := &redis.XAddArgs{
 		Stream:       stream,
 		ID:           entry.ID,
@@ -166,26 +166,22 @@ type XAckResult struct {
 // happen in proper usage and are are not recoverable, matching up with the
 // idiomatic meaning of `panic` in golang.
 func (c *Client) Process(args ProcessArgs) ([]XAckResult, []string) {
+	// parse args
 	from := args.From
 	to := args.To
 	override := args.Override
-	conf := &Config{
-		MaxLen:       c.conf.MaxLen,
-		MaxLenApprox: c.conf.MaxLenApprox,
-	}
-	if override != nil {
-		conf = &Config{
-			MaxLen:       override.MaxLen,
-			MaxLenApprox: override.MaxLenApprox,
-		}
-	}
+
+	// build multi/exec pipeline
 	pipe := c.redisClient.TxPipeline()
+	// XACK
 	xAckCmds := []*redis.IntCmd{}
 	for _, e := range from {
 		cmd := pipe.XAck(e.Meta.Stream, e.Meta.Consumer.Group, e.ID)
 		xAckCmds = append(xAckCmds, cmd)
 	}
+	// XADD
 	xAddCmds := []*redis.StringCmd{}
+	conf := c.getOverridenConf(override)
 	for _, e := range to {
 		args := &redis.XAddArgs{
 			Stream:       e.Meta.Stream,
@@ -197,6 +193,8 @@ func (c *Client) Process(args ProcessArgs) ([]XAckResult, []string) {
 		cmd := pipe.XAdd(args)
 		xAddCmds = append(xAddCmds, cmd)
 	}
+
+	// run multi/exec pipeline, process results
 	pipe.Exec()
 	acks := []XAckResult{}
 	for i, cmd := range xAckCmds {
