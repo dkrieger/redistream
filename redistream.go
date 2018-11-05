@@ -147,7 +147,7 @@ func (c *Client) Produce(stream string, entry Entry, override *Config) (string, 
 type ProcessArgs struct {
 	From     []Entry
 	To       []Entry
-	Override Config
+	Override *Config
 }
 
 type XAckResult struct {
@@ -165,7 +165,7 @@ type XAckResult struct {
 // client can't even manually roll it back. Thus, these errors should never
 // happen in proper usage and are are not recoverable, matching up with the
 // idiomatic meaning of `panic` in golang.
-func (c *Client) Process(args ProcessArgs) (XAckResult, []string) {
+func (c *Client) Process(args ProcessArgs) ([]XAckResult, []string) {
 	from := args.From
 	to := args.To
 	override := args.Override
@@ -174,18 +174,18 @@ func (c *Client) Process(args ProcessArgs) (XAckResult, []string) {
 		MaxLenApprox: c.conf.MaxLenApprox,
 	}
 	if override != nil {
-		conf := &Config{
+		conf = &Config{
 			MaxLen:       override.MaxLen,
 			MaxLenApprox: override.MaxLenApprox,
 		}
 	}
 	pipe := c.redisClient.TxPipeline()
-	xAckCmds := []*redis.Cmd{}
+	xAckCmds := []*redis.IntCmd{}
 	for _, e := range from {
 		cmd := pipe.XAck(e.Meta.Stream, e.Meta.Consumer.Group, e.ID)
 		xAckCmds = append(xAckCmds, cmd)
 	}
-	xAddCmds := []*redis.Cmd{}
+	xAddCmds := []*redis.StringCmd{}
 	for _, e := range to {
 		args := &redis.XAddArgs{
 			Stream:       e.Meta.Stream,
@@ -206,8 +206,8 @@ func (c *Client) Process(args ProcessArgs) (XAckResult, []string) {
 			// mean the stream or group has been deleted.
 			panic(err)
 		}
-		append(acks, XAckResult{
-			ID:      from[i],
+		acks = append(acks, XAckResult{
+			ID:      from[i].ID,
 			Success: count == 1,
 		})
 	}
