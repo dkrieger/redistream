@@ -96,20 +96,33 @@ func (s StreamMap) Flat() []Entry {
 	return entries
 }
 
-func (c *Client) Consume(consumer Consumer, streams []string, override *Config) (StreamMap, error) {
+type ConsumeArgs struct {
+	Consumer Consumer
+	Streams  []string
+	Override *Config
+}
+
+func (c *Client) Consume(args ConsumeArgs) (StreamMap, error) {
+	// parse args
+	consumer := args.Consumer
+	streams := args.Streams
+	override := args.Override
+
+	// XREADGROUP
+	streamEntries := StreamMap{}
 	conf := c.getOverridenConf(override)
-	args := &redis.XReadGroupArgs{
+	res, err := c.redisClient.XReadGroup(&redis.XReadGroupArgs{
 		Group:    consumer.Group,
 		Consumer: consumer.Name,
 		Streams:  streams,
 		Count:    conf.Count,
 		Block:    conf.Block,
-	}
-	streamEntries := StreamMap{}
-	res, err := c.redisClient.XReadGroup(args).Result()
+	}).Result()
 	if err != nil && err.Error() != "redis: nil" {
 		return streamEntries, err
 	}
+
+	// process results
 	for _, stream := range res {
 		entries := []Entry{}
 		for _, msg := range stream.Messages {
@@ -128,16 +141,24 @@ func (c *Client) Consume(consumer Consumer, streams []string, override *Config) 
 	return streamEntries, nil
 }
 
-func (c *Client) Produce(stream string, entry Entry, override *Config) (string, error) {
+type ProduceArgs struct {
+	Stream   string
+	Entry    Entry
+	Override *Config
+}
+
+func (c *Client) Produce(args ProduceArgs) (string, error) {
+	stream := args.Stream
+	entry := args.Entry
+	override := args.Override
 	conf := c.getOverridenConf(override)
-	args := &redis.XAddArgs{
+	ID, err := c.redisClient.XAdd(&redis.XAddArgs{
 		Stream:       stream,
 		ID:           entry.ID,
 		Values:       entry.Hash,
 		MaxLen:       conf.MaxLen,
 		MaxLenApprox: conf.MaxLenApprox,
-	}
-	ID, err := c.redisClient.XAdd(args).Result()
+	}).Result()
 	if err != nil {
 		return ID, err
 	}
