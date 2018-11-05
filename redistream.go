@@ -51,7 +51,17 @@ type EntryMeta struct {
 	Stream   string
 }
 
-func (c *Client) Consume(consumer Consumer, streams []string, override *Config) (map[string][]Entry, error) {
+type StreamMap map[string][]Entry
+
+func (s StreamMap) Flat() []Entry {
+	entries := []Entry{}
+	for _, e := range s {
+		copy(entries, e)
+	}
+	return entries
+}
+
+func (c *Client) Consume(consumer Consumer, streams []string, override *Config) (StreamMap, error) {
 	conf := &Config{
 		Count: c.conf.Count,
 		Block: c.conf.Block,
@@ -69,7 +79,7 @@ func (c *Client) Consume(consumer Consumer, streams []string, override *Config) 
 		Count:    conf.Count,
 		Block:    conf.Block,
 	}
-	streamEntries := map[string][]Entry{}
+	streamEntries := StreamMap{}
 	res, err := c.redisClient.XReadGroup(args).Result()
 	if err != nil && err.Error() != "redis: nil" {
 		return streamEntries, err
@@ -117,10 +127,80 @@ func (c *Client) Produce(stream string, entry Entry, override *Config) (string, 
 	return ID, err
 }
 
+type ProcessArgs struct {
+	From     []Entry
+	To       []Entry
+	Override Config
+}
+
+type XAckResult struct {
+	ID      string
+	Success bool
+}
+
 // Process atomically `XACK`s and `XADD`s entries. For example, this can be
 // used for migrating entries from one stream to another, processing a batch of
 // entries into one dependent entry, or `XACK`ing entries without `XADD`ing
-// any. It can be thought of `XACK` with optional `XADD` side-effects.
-func (c *Client) Process(from []Entry, to []Entry) {
-	// . . .
+// any. Process can be thought of `XACK` with optional `XADD` side-effects.
+// NOTE: this will panic on any errors whatsoever; transactions in redis cannot
+// be rolled back, as antirez believes the client should be responsible for
+// avoiding errors. Furthermore, `XACK` is an irreversible operation, so the
+// client can't even manually roll it back. Thus, these errors should never
+// happen in proper usage and are are not recoverable, matching up with the
+// idiomatic meaning of `panic` in golang.
+func (c *Client) Process(args ProcessArgs) (XAckResult, []string) {
+	from := args.From
+	to := args.To
+	override := args.Override
+	conf := &Config{
+		MaxLen:       c.conf.MaxLen,
+		MaxLenApprox: c.conf.MaxLenApprox,
+	}
+	if override != nil {
+		conf := &Config{
+			MaxLen:       override.MaxLen,
+			MaxLenApprox: override.MaxLenApprox,
+		}
+	}
+	pipe := c.redisClient.TxPipeline()
+	xAckCmds := []*redis.Cmd{}
+	for _, e := range from {
+		cmd := pipe.XAck(e.Meta.Stream, e.Meta.Consumer.Group, e.ID)
+		xAckCmds = append(xAckCmds, cmd)
+	}
+	xAddCmds := []*redis.Cmd{}
+	for _, e := range to {
+		args := &redis.XAddArgs{
+			Stream:       e.Meta.Stream,
+			ID:           e.ID,
+			Values:       e.Hash,
+			MaxLen:       conf.MaxLen,
+			MaxLenApprox: conf.MaxLenApprox,
+		}
+		cmd := pipe.XAdd(args)
+		xAddCmds = append(xAddCmds, cmd)
+	}
+	pipe.Exec()
+	acks := []XAckResult{}
+	for i, cmd := range xAckCmds {
+		count, err := cmd.Result()
+		if err != nil {
+			// XACK shouldn't error under normal usage. It might
+			// mean the stream or group has been deleted.
+			panic(err)
+		}
+		append(acks, XAckResult{
+			ID:      from[i],
+			Success: count == 1,
+		})
+	}
+	ids := []string{}
+	for _, cmd := range xAddCmds {
+		id, err := cmd.Result()
+		if err != nil {
+			panic(err)
+		}
+		ids = append(ids, id)
+	}
+	return acks, ids
 }
