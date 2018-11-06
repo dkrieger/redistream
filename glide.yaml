@@ -1,0 +1,15 @@
+package: github.com/dkrieger/redistream
+import:
+- package: github.com/go-redis/redis
+testImport:
+- package: github.com/docker/docker
+  subpackages:
+  - api/types
+  - api/types/container
+  - client
+- package: github.com/docker/go-connections
+  subpackages:
+  - nat
+- package: github.com/stretchr/testify
+  subpackages:
+  - assert

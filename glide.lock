@@ -1,0 +1,84 @@
+hash: 4390f3486001f98526d0400a939cf9ccfa270c3772d2856934d85b7388d1bd56
+updated: 2018-11-06T13:37:20.543665-05:00
+imports:
+- name: github.com/go-redis/redis
+  version: 58f22c56fdbdf07f5d6f5e397a6e134b94c65b0c
+  subpackages:
+  - internal
+  - internal/consistenthash
+  - internal/hashtag
+  - internal/pool
+  - internal/proto
+  - internal/singleflight
+  - internal/util
+testImports:
+- name: github.com/davecgh/go-spew
+  version: d8f796af33cc11cb798c1aaeb27a4ebc5099927d
+  subpackages:
+  - spew
+- name: github.com/docker/distribution
+  version: 93e082742a009850ac46962150b2f652a822c5ff
+  subpackages:
+  - digestset
+  - reference
+- name: github.com/docker/docker
+  version: c21c9b5fad8234190ebda7332c52cc36470ca14c
+  subpackages:
+  - api
+  - api/types
+  - api/types/blkiodev
+  - api/types/container
+  - api/types/events
+  - api/types/filters
+  - api/types/image
+  - api/types/mount
+  - api/types/network
+  - api/types/registry
+  - api/types/strslice
+  - api/types/swarm
+  - api/types/swarm/runtime
+  - api/types/time
+  - api/types/versions
+  - api/types/volume
+  - client
+  - errdefs
+- name: github.com/docker/go-connections
+  version: 97c2040d34dfae1d1b1275fa3a78dbdd2f41cf7e
+  subpackages:
+  - nat
+  - sockets
+  - tlsconfig
+- name: github.com/docker/go-units
+  version: 2fb04c6466a548a03cb009c5569ee1ab1e35398e
+- name: github.com/gogo/protobuf
+  version: 211a54c57504366b3bf4b490fb3c0a5f5b8d290b
+  subpackages:
+  - proto
+- name: github.com/Microsoft/go-winio
+  version: 97e4973ce50b2ff5f09635a57e2b88a037aae829
+- name: github.com/opencontainers/go-digest
+  version: c9281466c8b2f606084ac71339773efd177436e7
+- name: github.com/opencontainers/image-spec
+  version: 09950c5fb1bb6745e72aa26ecde0d540e35f5286
+  subpackages:
+  - specs-go
+  - specs-go/v1
+- name: github.com/pkg/errors
+  version: 059132a15dd08d6704c67711dae0cf35ab991756
+- name: github.com/pmezard/go-difflib
+  version: 792786c7400a136282c1664665ae0a8db921c6c2
+  subpackages:
+  - difflib
+- name: github.com/stretchr/testify
+  version: 04af85275a5c7ac09d16bb3b9b2e751ed45154e5
+  subpackages:
+  - assert
+- name: golang.org/x/net
+  version: 10aee181995363b41f712a55844a0dd52ea04646
+  subpackages:
+  - internal/socks
+  - proxy
+- name: golang.org/x/sys
+  version: 3a76605856fddce5718553cbb8bd50ca492a7274
+  subpackages:
+  - windows
