@@ -61,6 +61,7 @@ func removeMatchingContainers(cli *client.Client, ctx context.Context, exactName
 			if err != nil {
 				panic(err)
 			}
+			fmt.Printf("old redis:5.0.0 removed (ID: %.12s, Name: %s)\n", c.ID, exactName)
 		}
 	}
 }
