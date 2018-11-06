@@ -40,11 +40,11 @@ type Config struct {
 }
 
 type Client struct {
-	redisClient *redis.Client
+	redisClient redis.Cmdable
 	conf        Config
 }
 
-func WrapClient(redisClient *redis.Client, conf Config) *Client {
+func WrapClient(redisClient redis.Cmdable, conf Config) *Client {
 	return &Client{
 		redisClient,
 		conf,
@@ -91,7 +91,7 @@ type StreamMap map[string][]Entry
 func (s StreamMap) Flat() []Entry {
 	entries := []Entry{}
 	for _, e := range s {
-		copy(entries, e)
+		entries = append(entries, e...)
 	}
 	return entries
 }
