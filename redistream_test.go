@@ -37,13 +37,81 @@ func TestProduceConsume(t *testing.T) {
 		Consumer: consumer,
 		Streams:  []string{stream, ">"}})
 	if err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
 	observed := Entry{}
 	if len(smap[stream]) > 0 {
 		observed = smap[stream][0]
 	}
 	assert.Equal(t, entry.Hash, observed.Hash)
+}
+
+func TestProcess(t *testing.T) {
+	r, cleanup := getClient()
+	defer cleanup()
+	conf := Config{
+		MaxLenApprox: 1000,
+		Block:        5 * time.Second,
+		Count:        50}
+	c := WrapClient(r, conf)
+	stream := "TestRedistream"
+	r.Del(stream)
+	entry := Entry{
+		Hash: map[string]interface{}{
+			"foo": "bar",
+			"zip": "zap",
+			"i":   0}}
+	for i := 0; i < 10; i++ {
+		entry.Hash["i"] = i
+		c.Produce(ProduceArgs{
+			Stream: stream,
+			Entry:  entry})
+	}
+	consumer := Consumer{
+		Group: "redistream",
+		Name:  "default"}
+	smap, err := c.Consume(ConsumeArgs{
+		Consumer: consumer,
+		Streams:  []string{stream, ">"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries := smap.Flat()
+	str := ""
+	for i, e := range entries {
+		if i < len(entries)-1 {
+			str = fmt.Sprintf("%s %s(%s),", str, e.ID, e.Hash["i"])
+		} else {
+			str = fmt.Sprintf("%s %s(%s)", str, e.ID, e.Hash["i"])
+		}
+	}
+	streamDest := stream + "_2"
+	toentry := []Entry{
+		Entry{
+			Hash: map[string]interface{}{
+				"data": str,
+			},
+			Meta: &EntryMeta{Stream: streamDest},
+		},
+	}
+	c.Process(ProcessArgs{From: entries, To: toentry})
+
+	// Dest stream is the right length and entry hash matches the input?
+	destEntries, err := c.Consume(ConsumeArgs{
+		Consumer: consumer,
+		Streams:  []string{streamDest, ">"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, 1, len(destEntries))
+	assert.Equal(t, toentry[0].Hash, destEntries.Flat()[0].Hash)
+
+	// XACK worked?
+	srcPending, err := r.XPending(stream, consumer.Group).Result()
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, int64(0), srcPending.Count)
 }
 
 func removeMatchingContainers(cli *client.Client, ctx context.Context, exactName string) {
@@ -127,7 +195,8 @@ func getClient() (*redis.Client, func()) {
 	}()
 	addr := "localhost:16379"
 	r := redis.NewClient(&redis.Options{
-		Addr: addr})
+		PoolSize: 10,
+		Addr:     addr})
 	if _, err := r.Ping().Result(); err != nil {
 		panic(err)
 	}
