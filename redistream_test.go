@@ -37,6 +37,8 @@ func TestMerge(t *testing.T) {
 		{ID: "1-1", Hash: hash},
 		{ID: "2-0", Hash: hash},
 		{ID: "2-1", Hash: hash}}
+
+	// "stream_two" first
 	expected := append(common, []Entry{
 		{ID: "3-0", Hash: hash, Meta: &EntryMeta{Stream: "stream_two"}},
 		{ID: "3-0", Hash: hash, Meta: &EntryMeta{Stream: "stream_one"}}}...)
