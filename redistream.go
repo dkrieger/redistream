@@ -85,6 +85,10 @@ type Consumer struct {
 	Name  string
 }
 
+func DefaultConsumer() Consumer {
+	return Consumer{Group: "redistream", Name: "redistream"}
+}
+
 type EntryMeta struct {
 	Consumer Consumer
 	Stream   string
