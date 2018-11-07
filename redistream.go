@@ -300,19 +300,19 @@ func (c *Client) Process(args ProcessArgs) ([]XAckResult, []string, error) {
 	// run multi/exec pipeline, process results
 	pipe.Exec()
 	acks := []XAckResult{}
+	ids := []string{}
 	for i, cmd := range xAckCmds {
 		count, err := cmd.Result()
 		if err != nil {
 			// XACK shouldn't error under normal usage. It might
 			// mean the stream or group has been deleted.
-			panic(err)
+			return acks, ids, err
 		}
 		acks = append(acks, XAckResult{
 			ID:      from[i].ID,
 			Success: count == 1,
 		})
 	}
-	ids := []string{}
 	for _, cmd := range xAddCmds {
 		id, err := cmd.Result()
 		if err != nil {
