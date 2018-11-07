@@ -14,6 +14,56 @@ import (
 	"time"
 )
 
+func TestMerge(t *testing.T) {
+	hash := map[string]interface{}{
+		"foo": "bar",
+		"baz": "zip"}
+	smap := StreamMap{
+		"stream_one": []Entry{
+			{ID: "0-0", Hash: hash},
+			{ID: "1-1", Hash: hash},
+			{ID: "2-0", Hash: hash},
+			{ID: "3-0", Hash: hash, Meta: &EntryMeta{Stream: "stream_one"}}},
+		"stream_two": []Entry{
+			{ID: "0-1", Hash: hash},
+			{ID: "1-0", Hash: hash},
+			{ID: "2-1", Hash: hash},
+			{ID: "3-0", Hash: hash, Meta: &EntryMeta{Stream: "stream_two"}}},
+	}
+	common := []Entry{
+		{ID: "0-0", Hash: hash},
+		{ID: "0-1", Hash: hash},
+		{ID: "1-0", Hash: hash},
+		{ID: "1-1", Hash: hash},
+		{ID: "2-0", Hash: hash},
+		{ID: "2-1", Hash: hash}}
+	expected := append(common, []Entry{
+		{ID: "3-0", Hash: hash, Meta: &EntryMeta{Stream: "stream_two"}},
+		{ID: "3-0", Hash: hash, Meta: &EntryMeta{Stream: "stream_one"}}}...)
+	actual, err := smap.Merge(&[]string{"stream_two", "stream_one"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, expected, actual)
+
+	// "stream_one" first
+	expected = append(common, []Entry{
+		{ID: "3-0", Hash: hash, Meta: &EntryMeta{Stream: "stream_one"}},
+		{ID: "3-0", Hash: hash, Meta: &EntryMeta{Stream: "stream_two"}}}...)
+	actual, err = smap.Merge(&[]string{"stream_one", "stream_two"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, expected, actual)
+
+	// no merge priority
+	actual, err = smap.Merge(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, common, actual[0:6])
+}
+
 func TestProduceConsume(t *testing.T) {
 	r, cleanup := getClient()
 	defer cleanup()
@@ -76,7 +126,10 @@ func TestProcess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	entries := smap.Flat()
+	entries, err := smap.Merge(nil)
+	if err != nil {
+		panic(err)
+	}
 	str := ""
 	for i, e := range entries {
 		if i < len(entries)-1 {
@@ -104,7 +157,11 @@ func TestProcess(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, 1, len(destEntries))
-	assert.Equal(t, toentry[0].Hash, destEntries.Flat()[0].Hash)
+	merged, err := destEntries.Merge(nil)
+	if err != nil {
+		panic(err)
+	}
+	assert.Equal(t, toentry[0].Hash, merged[0].Hash)
 
 	// XACK worked?
 	srcPending, err := r.XPending(stream, consumer.Group).Result()
@@ -187,6 +244,8 @@ func runRedisDocker() func() {
 
 func getClient() (*redis.Client, func()) {
 	cleanup := runRedisDocker()
+	// give redis a bit to come online
+	time.Sleep(time.Millisecond * 50)
 	defer func() {
 		if r := recover(); r != nil {
 			cleanup()

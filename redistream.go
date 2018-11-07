@@ -27,7 +27,11 @@
 package redistream
 
 import (
+	"errors"
 	"github.com/go-redis/redis"
+	"sort"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -88,12 +92,51 @@ type EntryMeta struct {
 
 type StreamMap map[string][]Entry
 
-func (s StreamMap) Flat() []Entry {
+const (
+	PriorityLengthMismatch = "priority slice length must match StreamMap length"
+	PriorityDuplicates     = "priority slice must not contain duplicates"
+)
+
+func (s StreamMap) Merge(priority *[]string) ([]Entry, error) {
 	entries := []Entry{}
-	for _, e := range s {
-		entries = append(entries, e...)
+	if priority != nil {
+		if len(*priority) != len(s) {
+			return entries, errors.New(PriorityLengthMismatch)
+		}
+		set := map[string]bool{}
+		for _, k := range *priority {
+			entries = append(entries, s[k]...)
+			set[k] = true
+		}
+		if len(set) != len(s) {
+			return []Entry{}, errors.New(PriorityDuplicates)
+		}
+	} else {
+		for _, e := range s {
+			entries = append(entries, e...)
+		}
 	}
-	return entries
+	splitId := func(id string) [2]int {
+		split := strings.Split(id, "-")
+		first, err := strconv.Atoi(split[0])
+		if err != nil {
+			panic(err)
+		}
+		second, err := strconv.Atoi(split[1])
+		if err != nil {
+			panic(err)
+		}
+		return [2]int{first, second}
+	}
+	sort.SliceStable(entries, func(i, j int) bool {
+		iSplit := splitId(entries[i].ID)
+		jSplit := splitId(entries[j].ID)
+		if iSplit[0] == jSplit[0] {
+			return iSplit[1] < jSplit[1]
+		}
+		return iSplit[0] < jSplit[0]
+	})
+	return entries, nil
 }
 
 type ConsumeArgs struct {
