@@ -268,7 +268,7 @@ type XAckResult struct {
 // client can't even manually roll it back. Thus, these errors should never
 // happen in proper usage and are are not recoverable, matching up with the
 // idiomatic meaning of `panic` in golang.
-func (c *Client) Process(args ProcessArgs) ([]XAckResult, []string) {
+func (c *Client) Process(args ProcessArgs) ([]XAckResult, []string, error) {
 	// parse args
 	from := args.From
 	to := args.To
@@ -316,9 +316,9 @@ func (c *Client) Process(args ProcessArgs) ([]XAckResult, []string) {
 	for _, cmd := range xAddCmds {
 		id, err := cmd.Result()
 		if err != nil {
-			panic(err)
+			return acks, ids, err
 		}
 		ids = append(ids, id)
 	}
-	return acks, ids
+	return acks, ids, nil
 }

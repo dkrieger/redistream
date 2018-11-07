@@ -1,5 +1,5 @@
 hash: 4390f3486001f98526d0400a939cf9ccfa270c3772d2856934d85b7388d1bd56
-updated: 2018-11-06T13:37:20.543665-05:00
+updated: 2018-11-07T16:20:44.278529-05:00
 imports:
 - name: github.com/go-redis/redis
   version: 58f22c56fdbdf07f5d6f5e397a6e134b94c65b0c
@@ -22,7 +22,7 @@ testImports:
   - digestset
   - reference
 - name: github.com/docker/docker
-  version: c21c9b5fad8234190ebda7332c52cc36470ca14c
+  version: bd224b5fe564f343e22fa76ae8569ec949f35802
   subpackages:
   - api
   - api/types
@@ -74,11 +74,11 @@ testImports:
   subpackages:
   - assert
 - name: golang.org/x/net
-  version: 10aee181995363b41f712a55844a0dd52ea04646
+  version: a544f70c90f196e50d198126db0c4cb2b562fec0
   subpackages:
   - internal/socks
   - proxy
 - name: golang.org/x/sys
-  version: 3a76605856fddce5718553cbb8bd50ca492a7274
+  version: 66b7b1311ac80bbafcd2daeef9a5e6e2cd1e2399
   subpackages:
   - windows
